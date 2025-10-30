@@ -1,0 +1,145 @@
+name: Build xmrig-cuda for Linux
+# Generated with the help of GPT-5.
+
+# Note for self in future, when updating...
+# 1. Update build matrix for CUDA versions.
+# 2. Bump Jimver/cuda-toolkit@v whenever you want access to higher versions of the toolkit.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (Ubuntu 22.04 - CUDA ${{ matrix.cuda_version }})
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # match currently offered cudalibs on xmrig
+        # review https://github.com/Jimver/cuda-toolkit/blob/master/src/links/linux-links.ts
+        cuda_version: ["10.2.89", "11.8.0", "12.9.1"]
+        
+    env:
+      BUILD_TYPE: Release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine CUDA version (from file or matrix)
+        id: cuda
+        shell: bash
+        run: |
+          if [ -f cuda_version.txt ]; then
+            echo "cuda_version=$(cat cuda_version.txt)" >> $GITHUB_OUTPUT
+          else
+            echo "cuda_version=${{ matrix.cuda_version }}" >> $GITHUB_OUTPUT
+          fi
+
+      # ---------------------- EXTRACT APP VERSION --------------------
+      - name: Extract app version from src/version.h
+        id: version
+        shell: bash
+        run: |
+          if [ -f src/version.h ]; then
+            VER=$(grep '#define APP_VERSION' src/version.h | cut -d'"' -f2)
+          else
+            VER="unknown"
+          fi
+          echo "app_version=$VER" >> $GITHUB_OUTPUT
+          echo "Detected version: $VER"
+
+      # ---------------------- CACHE CUDA TOOLKIT ----------------------
+      - name: Cache CUDA Toolkit
+        id: cache-cuda
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/cuda-*
+          key: ${{ runner.os }}-cuda-${{ steps.cuda.outputs.cuda_version }}
+
+      # ---------------------- INSTALL CUDA TOOLKIT --------------------
+      - name: Install CUDA Toolkit
+        if: steps.cache-cuda.outputs.cache-hit != 'true'
+        uses: Jimver/cuda-toolkit@v0.2.28
+        with:
+          cuda: ${{ steps.cuda.outputs.cuda_version }}
+          method: 'network'
+          sub-packages: '["nvcc", "cudart"]'
+
+      # ---------------------- DEPENDENCIES ----------------------------
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git nvidia-cuda-dev
+
+      # ---------------------- CONFIGURE -------------------------------
+      - name: Configure project
+        shell: bash
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DCUDA_LIB="/usr/local/cuda/lib64/stubs/libcuda.so" \
+            -DCUDA_TOOLKIT_ROOT_DIR="/usr/local/cuda"
+
+      # ---------------------- BUILD ----------------------------------
+      - name: Build project
+        continue-on-error: true
+        run: |
+          cd build
+          cmake --build . --config $BUILD_TYPE -j$(nproc)
+
+      # ---------------------- CHECK DEPENDENCIES ----------------------
+      - name: Check linked libraries (ldd)
+        id: ldd
+        shell: bash
+        run: |
+          mkdir -p artifact
+          BUILD_DATE=$(date +%Y%m%d)
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+          cd build
+          echo "Build Date: $BUILD_DATE" > ../artifact/ldd-report.txt
+          echo "Commit: ${GITHUB_SHA}" >> ../artifact/ldd-report.txt
+          echo "CUDA Version: ${{ steps.cuda.outputs.cuda_version }}" >> ../artifact/ldd-report.txt
+          echo "App Version: ${{ steps.version.outputs.app_version }}" >> ../artifact/ldd-report.txt
+          echo -e "\n==== Linked Libraries ====" >> ../artifact/ldd-report.txt
+          if [ -f libxmrig-cuda.so ]; then
+            echo -e "\n[libxmrig-cuda.so]" >> ../artifact/ldd-report.txt
+            ldd libxmrig-cuda.so >> ../artifact/ldd-report.txt
+          fi
+          if [ -f libxmrig-cu.a ]; then
+            echo -e "\n[libxmrig-cu.a]" >> ../artifact/ldd-report.txt
+            ar t libxmrig-cu.a >> ../artifact/ldd-report.txt
+          fi
+          
+      # ---------------------- PACKAGE BUILD OUTPUT --------------------
+      - name: Prepare artifacts and checksums
+        shell: bash
+        run: |
+          cd build
+          if [ -f libxmrig-cuda.so ]; then
+            cp libxmrig-cuda.so ../artifact/
+          fi
+          if [ -f libxmrig-cu.a ]; then
+            cp libxmrig-cu.a ../artifact/
+          fi
+          cd ../artifact
+          sha256sum * > sha256sums.txt
+          echo "Contents of sha256sums.txt:"
+          cat sha256sums.txt
+
+      # ---------------------- UPLOAD ARTIFACT ------------------------
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xmrig-cuda-linux-${{ steps.version.outputs.app_version }}-cuda${{ steps.cuda.outputs.cuda_version }}
+          path: artifact

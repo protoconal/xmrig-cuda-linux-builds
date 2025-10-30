@@ -1,3 +1,12 @@
+# Linux Builds
+
+Hello! This repo provides automated builds of the xmrig-cuda plugin for Linux hosts.
+
+Will it work? Who knows! I'm barely qualified to set this up.
+
+Check the releases for the latest *manually uploaded*; you can grab them from the artifacts in the jobs.
+
+----
 # xmrig-cuda
 This repository contains the CUDA plugin for the XMRig miner, which provides support for NVIDIA GPUs.
 
