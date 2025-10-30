@@ -4,7 +4,7 @@ Hello! This repo provides automated builds of the xmrig-cuda plugin for Linux ho
 
 Will it work? Who knows! I'm barely qualified to set this up.
 
-Check the releases for the latest *manually uploaded*; you can grab them from the artifacts in the jobs.
+Check the releases for the latest ones, automatically built and uploaded (trusting the fine folks at Jimver and softprops); or checkout the workflow runs and grab them from the job artifacts.
 
 ----
 # xmrig-cuda
