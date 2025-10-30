@@ -4,6 +4,8 @@ name: Build + Publish xmrig-cuda for Linux
 # Note for self in future, when updating...
 # 1. Update build matrix for CUDA versions.
 # 2. Bump Jimver/cuda-toolkit@v whenever you want access to higher versions of the toolkit.
+# note: depending on available Ubuntu runners, support might drop for past CUDA versions
+# i.e., dropped 10.2 cause packages don't seem to install on 22.04 automatically
 
 on:
   push:
