@@ -21,7 +21,7 @@ jobs:
       matrix:
         # match currently offered cudalibs on xmrig
         # review https://github.com/Jimver/cuda-toolkit/blob/master/src/links/linux-links.ts
-        cuda_version: ["10.2.89", "11.8.0", "12.9.1"]
+        cuda_version: ["11.8.0", "12.9.1"]
         
     env:
       BUILD_TYPE: Release
